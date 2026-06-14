@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>The Glass Artist's Grid — preview</title>
+<style>
+  :root{
+    --lead:#14101f;--lead-soft:#2a2440;--ink:#211a30;--parchment:#f3ead9;--parchment-2:#e7dcc4;
+    --panel:#fbf6ec;--panel-border:#cdbf9f;--gold:#E0A526;--text:#2a2233;--text-soft:#6a6075;--shadow:rgba(40,28,60,.25);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:'Segoe UI','Helvetica Neue',system-ui,sans-serif;color:var(--text);background:var(--parchment);
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  .app{display:flex;flex-direction:column;height:100%}
+  .app-header{display:flex;align-items:center;gap:16px;padding:11px 18px;
+    background:linear-gradient(180deg,#241a36,#1a1328);color:#f5eede;border-bottom:3px solid var(--lead);
+    box-shadow:0 2px 12px var(--shadow);z-index:5}
+  .app-title{display:flex;flex-direction:column;line-height:1.15}
+  .app-title h1{margin:0;font-size:1.15rem;font-weight:700;letter-spacing:.3px}
+  .app-title span{font-size:.74rem;color:#c9bce6}
+  .progress-wrap{flex:1;min-width:100px;max-width:500px}
+  .progress-bar{height:14px;border-radius:8px;background:#100c1c;overflow:hidden;display:flex;border:1px solid #000}
+  .progress-seg{height:100%;transition:width .35s ease}
+  .progress-seg.mastered{background:linear-gradient(180deg,#ffd968,#E0A526)}
+  .progress-seg.practiced{background:linear-gradient(180deg,#8fd6b0,#2E9B6B)}
+  .progress-seg.learning{background:linear-gradient(180deg,#f0a6b0,#B23A4C)}
+  .progress-meta{display:flex;justify-content:space-between;font-size:.7rem;color:#c9bce6;margin-top:4px}
+  .btn{font:inherit;font-size:.8rem;padding:7px 12px;border-radius:7px;border:1px solid var(--lead);
+    background:#322749;color:#f0e9da;cursor:pointer}
+  .btn:hover{background:#43365f}.btn.ghost{background:transparent}
+  .stage{position:relative;flex:1;overflow:hidden;
+    background:radial-gradient(1200px 800px at 50% 40%,#fbf5e8 0%,var(--parchment) 55%,var(--parchment-2) 100%);
+    cursor:grab;touch-action:none}
+  .stage.panning{cursor:grabbing}
+  .grid-svg{width:100%;height:100%;display:block;touch-action:none}
+  .node-label{font-size:15px;font-weight:600;fill:var(--ink);pointer-events:none;paint-order:stroke;
+    stroke:rgba(251,246,236,.85);stroke-width:4px}
+  .node-label.dim{fill:#8b8398}
+  .node-group{cursor:pointer}
+  .stage-hint{position:absolute;left:14px;bottom:12px;font-size:.72rem;color:var(--text-soft);
+    background:rgba(251,246,236,.82);border:1px solid var(--panel-border);border-radius:8px;padding:6px 10px;pointer-events:none}
+  .zoom-controls{position:absolute;right:14px;bottom:12px;display:flex;flex-direction:column;gap:6px}
+  .zoom-controls .btn{width:40px;height:40px;padding:0;font-size:1.2rem;background:var(--panel);color:var(--ink);border-color:var(--panel-border)}
+  .legend{position:absolute;left:14px;top:14px;background:rgba(251,246,236,.92);border:1px solid var(--panel-border);
+    border-radius:10px;padding:9px 11px;box-shadow:0 4px 14px var(--shadow);max-width:210px}
+  .legend h3{margin:0 0 7px;font-size:.74rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-soft)}
+  .legend-row{display:flex;align-items:center;gap:8px;font-size:.8rem;padding:2px 4px;cursor:pointer;border-radius:5px}
+  .legend-row:hover{background:rgba(0,0,0,.04)}.legend-row.muted{opacity:.4}
+  .legend-swatch{width:14px;height:14px;border-radius:4px;border:1.5px solid var(--lead);flex:none}
+  .legend-divider{height:1px;background:var(--panel-border);margin:8px 0}
+  .legend-state{display:flex;align-items:center;gap:8px;font-size:.76rem;padding:1px 4px;color:var(--text-soft)}
+  .legend-dot{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--lead);flex:none}
+  .detail{position:absolute;right:14px;top:14px;width:320px;max-width:calc(100vw - 28px);max-height:calc(100% - 28px);
+    overflow-y:auto;background:var(--panel);border:1px solid var(--panel-border);border-radius:12px;
+    box-shadow:0 10px 30px var(--shadow);z-index:4;display:none}
+  .detail.open{display:block}
+  .detail-top{padding:15px 18px 11px;border-bottom:1px solid var(--panel-border)}
+  .detail-disc{display:inline-flex;align-items:center;gap:7px;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px}
+  .detail-disc .legend-swatch{width:12px;height:12px}
+  .detail h2{margin:8px 0 0;font-size:1.15rem}
+  .detail-close{position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:7px;
+    border:1px solid var(--panel-border);background:#fff;cursor:pointer;font-size:1rem;line-height:1;color:var(--text-soft)}
+  .detail-body{padding:13px 18px 18px}
+  .detail-summary{font-size:.93rem;font-weight:600;margin:0 0 10px}
+  .detail-details{font-size:.86rem;line-height:1.5;color:#4a4256;margin:0 0 15px}
+  .detail-section-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.6px;color:var(--text-soft);margin:0 0 6px}
+  .prereq-list{list-style:none;padding:0;margin:0 0 15px;display:flex;flex-direction:column;gap:5px}
+  .prereq-item{display:flex;align-items:center;gap:8px;font-size:.84rem;cursor:pointer}
+  .prereq-item .tick{width:16px;text-align:center}
+  .prereq-item.met{color:#1f7a52}.prereq-item.unmet{color:#9a6630}
+  .prereq-none{font-size:.84rem;color:var(--text-soft);margin:0 0 15px}
+  .state-buttons{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .state-btn{font:inherit;font-size:.8rem;padding:9px 8px;border-radius:8px;border:1.5px solid var(--panel-border);
+    background:#fff;cursor:pointer;color:var(--text)}
+  .state-btn.active{color:#fff;border-color:var(--lead);font-weight:700}
+  .state-btn.active.locked{background:#8b8398}.state-btn.active.learning{background:#B23A4C}
+  .state-btn.active.practiced{background:#2E9B6B}.state-btn.active.mastered{background:#E0A526;color:#3a2c08}
+  .avail-note{margin:12px 0 0;font-size:.78rem;padding:8px 10px;border-radius:8px;background:#f6efe0;border:1px solid #e3d4b0;color:#7a5e2a}
+  .avail-note.ready{background:#e9f6ee;border-color:#b9e4cb;color:#1f7a52}
+  @media (max-width:720px){.legend{display:none}.detail{width:calc(100vw - 28px)}.progress-wrap{display:none}.app-title h1{font-size:1rem}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <div class="app-title"><h1>The Glass Artist&rsquo;s Grid</h1><span>A sphere grid for the path to mastery</span></div>
+    <div class="progress-wrap">
+      <div class="progress-bar" title="Mastered / Practiced / Learning">
+        <div class="progress-seg mastered" id="seg-mastered"></div>
+        <div class="progress-seg practiced" id="seg-practiced"></div>
+        <div class="progress-seg learning" id="seg-learning"></div>
+      </div>
+      <div class="progress-meta"><span id="progress-text"></span><span id="progress-count"></span></div>
+    </div>
+    <button class="btn ghost" id="reset-btn">Reset</button>
+  </header>
+  <div class="stage" id="stage">
+    <svg class="grid-svg" id="svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="nodeGlow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="6" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <g id="viewport"></g>
+    </svg>
+    <div class="legend" id="legend"></div>
+    <div class="stage-hint">Drag to pan · pinch or scroll to zoom · tap a node</div>
+    <div class="zoom-controls">
+      <button class="btn" id="zoom-in" aria-label="Zoom in">+</button>
+      <button class="btn" id="zoom-out" aria-label="Zoom out">&minus;</button>
+    </div>
+    <div class="detail" id="detail"></div>
+  </div>
+</div>
+<script>
+const DISCIPLINES = {
+  foundations:{id:'foundations',label:'Foundations',color:'#E0A526',glow:'#ffd968'},
+  stained:{id:'stained',label:'Stained Glass',color:'#2F6BB0',glow:'#6fa8e6'},
+  painting:{id:'painting',label:'Painting & Surface',color:'#B23A4C',glow:'#e87b8a'},
+  kiln:{id:'kiln',label:'Kiln Glass',color:'#2E9B6B',glow:'#65d6a3'},
+  hot:{id:'hot',label:'Hot Glass',color:'#D7732B',glow:'#ffac6b'},
+  engraving:{id:'engraving',label:'Engraving & Texture',color:'#7E57B5',glow:'#b48fe6'},
+};
+const STATES=['locked','learning','practiced','mastered'];
+const STATE_META={locked:{label:'Not started'},learning:{label:'Learning'},practiced:{label:'Practiced'},mastered:{label:'Mastered'}};
+const SKILLS=[
+  {id:'safety',name:'Studio Safety & Setup',discipline:'foundations',x:800,y:620,hub:true,prereqs:[],summary:'The first node. Glass cuts, lead and kiln fumes, hot torches — set up a workspace that keeps you making for decades.',details:'Lead hygiene, eye protection, ventilation for soldering and kiln firing, safe glass storage and disposal, first-aid for cuts and burns. Everything else builds on a studio you can work in safely.'},
+  {id:'glass-cutting',name:'Glass Cutting',discipline:'foundations',x:660,y:520,prereqs:['safety'],summary:'Scoring and breaking glass to a line — the single most-used skill across every flat-glass discipline.',details:'One clean score, then running the break with pliers, hands or a running tool. Straight cuts, inside and outside curves, circles, reading how glasses break, and grozing to refine an edge.'},
+  {id:'design-cartoon',name:'Design & Cartooning',discipline:'foundations',x:940,y:520,prereqs:['safety'],summary:'Turning an idea into a full-size working drawing (a "cartoon") with cut-lines, colours and numbered pieces.',details:'Composition, scaling to size, drawing cut-lines that respect the strength of lead or foil, and making pattern templates. The blueprint painting, leadwork and foil all follow.'},
+  {id:'colour-glass',name:'Colour & Glass Selection',discipline:'foundations',x:800,y:760,prereqs:['safety'],summary:'Knowing your materials: cathedral vs opalescent, COE for fusing, antique vs machine-rolled, and how light moves through colour.',details:'Reading glass for colour, texture and transmission, understanding compatibility (coefficient of expansion) for anything kiln-bound, and choosing glass that suits the technique.'},
+  {id:'copper-foil',name:'Copper Foil (Tiffany)',discipline:'stained',x:470,y:470,prereqs:['glass-cutting'],summary:'The Tiffany method: wrapping each glass edge in copper foil so intricate, three-dimensional pieces can be soldered together.',details:'Foiling tightly and burnishing, suited to small pieces, curves and lampshades where lead came is too bulky. The route to Tiffany-style shades and boxes.'},
+  {id:'leadwork',name:'Leadworking (Came)',discipline:'stained',x:560,y:380,prereqs:['glass-cutting'],summary:'Stretching, cutting and shaping lead came — the H-section channel that holds glass in traditional windows.',details:'Stretching came to harden it, cutting clean joints, fitting glass into the channels, and building a panel against battens. The structural craft behind leaded windows.'},
+  {id:'soldering',name:'Soldering',discipline:'stained',x:420,y:360,prereqs:['copper-foil'],summary:'Joining foil seams or lead came joints with molten solder — smooth beads for Tiffany, neat joints for leaded panels.',details:'Flux, heat control, and a steady run for a rounded bead on copper-foil seams; flat tinned joints on lead came. The skill that turns loose pieces into one rigid panel.'},
+  {id:'glass-in-lead',name:'Glass in Lead (Panels)',discipline:'stained',x:360,y:280,prereqs:['leadwork','soldering'],summary:'Building a complete leaded panel: glass set in came, soldered, then cemented and polished into a weatherproof whole.',details:'Cementing (puttying) under the came flanges for strength and weatherproofing, cleaning, and finishing. A full traditional panel from cartoon to finished work.'},
+  {id:'bevels',name:'Bevels & Jewels',discipline:'stained',x:320,y:560,prereqs:['glass-cutting'],summary:'Working with bevelled glass and pressed jewels that catch and refract light in a panel.',details:'Incorporating ready-made bevels, nuggets and jewels, and the basics of grinding your own bevel facets for prismatic highlights.'},
+  {id:'installation',name:'Installing Windows',discipline:'stained',x:230,y:200,prereqs:['glass-in-lead'],summary:'Fitting finished panels into actual window openings — measuring, reinforcing, weatherproofing and safe installation.',details:'Surveying an opening, building to size, adding tie-bars and reinforcement, fitting into frames, sealing against weather, and plating for large works. Where the panel becomes part of a building.'},
+  {id:'glass-painting',name:'Glass Painting',discipline:'painting',x:1040,y:460,prereqs:['design-cartoon'],summary:'Painting with vitreous (glass) paint that is kiln-fired permanently into the surface — trace lines and matt shading.',details:'Mixing and applying vitreous paint, laying tracing lines for detail and matting for tone and modelling, then firing to fuse the paint to the glass. The traditional language of figurative stained glass.'},
+  {id:'hard-edge',name:'Hard-Edge Line Work',discipline:'painting',x:1190,y:400,prereqs:['glass-painting'],summary:'Crisp, confident trace lines — the controlled "hard edge" that defines features and drawing in painted glass.',details:'Brush control for clean, unbroken lines of varying weight, stick-lighting over a light source, and reinforcing so lines survive firing sharp and dark.'},
+  {id:'silver-stain',name:'Silver / Yellow Stain',discipline:'painting',x:1190,y:540,prereqs:['glass-painting'],summary:'Silver-nitrate stain fired onto the back of glass for transparent yellows and ambers — the original "stain" in stained glass.',details:'Applying silver stain for ranges from pale lemon to deep amber, controlling strength by firing, and using it for hair, halos and detail without adding a separate piece of glass.'},
+  {id:'kiln-firing',name:'Kiln Firing (Paint)',discipline:'painting',x:1330,y:460,prereqs:['glass-painting'],summary:'Reading and running a kiln for painted and stained work — schedules, temperatures and avoiding ruined firings.',details:'Firing ranges for paint, stain and enamel, kiln-wash and setup, ramp/soak schedules, and recognising under- and over-firing. Shared backbone for everything that goes through heat.'},
+  {id:'enamels',name:'Glass Enamels',discipline:'painting',x:1470,y:480,prereqs:['kiln-firing','silver-stain'],summary:'Coloured low-fire enamels for painterly, full-colour imagery fired onto a single sheet of glass.',details:'Layering transparent and opaque enamels, multiple firings, and combining with trace and stain for painted panels.'},
+  {id:'gilding',name:'Gilding',discipline:'painting',x:1300,y:590,prereqs:['glass-painting'],summary:'Applying gold (and other metal) leaf to glass — including verre églomisé, gilding on the reverse for mirror-bright detail.',details:'Laying loose leaf onto size or water-gilding behind glass, burnishing, backing up and engraving into the leaf for ornament, lettering and luminous highlights.'},
+  {id:'fusing',name:'Fusing',discipline:'kiln',x:640,y:800,prereqs:['colour-glass'],summary:'Heating compatible glass until pieces fuse together — tack-fused texture through to a fully flat, glossy sheet.',details:'Stacking compatible (matched-COE) glass, tack and full-fuse schedules, controlling bubbles, and combining sheet, frit and stringer into new sheets and panels.'},
+  {id:'mold-making',name:'Mould Making',discipline:'kiln',x:540,y:900,prereqs:['fusing'],summary:'Making and using moulds — slumping formers and refractory casting moulds that shape glass in the kiln.',details:'Ready-made and hand-built slumping moulds, plus investment moulds taken from an original for casting. Kiln-wash, venting and release so glass shapes cleanly and lets go.'},
+  {id:'slumping',name:'Slumping',discipline:'kiln',x:440,y:810,prereqs:['fusing','mold-making'],summary:'Letting a fused sheet soften and drape over or into a mould to make bowls, dishes and dimensional forms.',details:'Lower-temperature schedules that bend rather than fully melt glass, controlling the slump for even walls, and staging fusing then slumping in separate firings.'},
+  {id:'kiln-casting',name:'Kiln Casting / Pâte de Verre',discipline:'kiln',x:380,y:920,prereqs:['mold-making','fusing'],summary:'Filling a refractory mould with glass and melting it to cast solid, sculptural forms — including delicate pâte de verre.',details:'Lost-wax and open-face casting, packing frit for pâte de verre, long annealing for thick work, and devesting and cold-finishing the casting. The sculptural end of kiln glass.'},
+  {id:'lampworking',name:'Lampworking (Flamework)',discipline:'hot',x:760,y:920,prereqs:['safety'],summary:'Shaping glass rod and tube at a torch flame — beads, pendants, figurines and scientific-style forms.',details:'Flame control, gathering and shaping molten rod on a mandrel or in air, marvering and tooling, and managing thermal shock with a flame- or batch-annealing routine.'},
+  {id:'glassblowing',name:'Glassblowing',discipline:'hot',x:910,y:940,prereqs:['safety','colour-glass'],summary:'Gathering molten glass on a blowpipe from a furnace and inflating, shaping and colouring it — vessels and sculpture.',details:'Gathering, marvering, blowing and shaping with jacks and blocks, applying colour, transferring to a punty, and opening forms. A team, furnace-based hot-shop discipline.'},
+  {id:'murrine',name:'Murrine & Cane',discipline:'hot',x:680,y:1030,prereqs:['lampworking'],summary:'Pulling patterned cane and slicing murrine — the cross-section "pictures in glass" used in beads, blowing and fusing.',details:'Building up coloured cane, pulling it down to scale, and cutting murrine slices to arrange into patterns. Crosses into both fusing and blown work.'},
+  {id:'annealing',name:'Annealing & Heat Control',discipline:'hot',x:830,y:1050,prereqs:['glassblowing'],summary:'Cooling hot glass slowly through its stress range so finished work does not crack — the make-or-break of hot glass.',details:'Understanding the annealing range, soak times scaled to thickness, and reading and avoiding internal stress. The discipline that decides whether hot work survives the night.'},
+  {id:'cold-working',name:'Cold Working',discipline:'engraving',x:1000,y:800,prereqs:['glass-cutting'],summary:'Grinding, cutting, smoothing and polishing cold glass — the finishing skill that links kiln, hot and engraved work.',details:'Flat-bed grinding, lap wheels, diamond pads, linishing and polishing to refine edges and surfaces, level fused pieces, and finish castings and blown work.'},
+  {id:'metal-engraving',name:'Metal Engraving',discipline:'engraving',x:1080,y:680,prereqs:['design-cartoon'],summary:'Hand-engraving metal with a graver — a transferable cutting and line discipline that feeds glass engraving and gilding ornament.',details:'Sharpening and controlling a graver, cutting clean lines and lettering in copper, brass or silver, and the eye for ornament that carries over to engraving glass and decorating leaf.'},
+  {id:'engraving-etching',name:'Glass Engraving & Etching',discipline:'engraving',x:1240,y:690,prereqs:['metal-engraving','cold-working'],summary:'Cutting decoration into the glass surface — drill/point and wheel engraving, plus acid and cream etching for frosted designs.',details:'Diamond-point and rotary-burr engraving, copper-wheel engraving for depth, and acid/cream etching through a resist for matt and tonal effects.'},
+  {id:'sandblasting',name:'Sandblasting',discipline:'engraving',x:1140,y:820,prereqs:['design-cartoon'],summary:'Blasting abrasive through a stencil to frost, shade or carve depth into the glass surface.',details:'Cutting and applying resist masks, surface frosting, graded/tonal blasting, and deeper stage-carving for relief. Pairs with cold working and etching for surface design.'},
+];
+const CROSS_LINKS=[['fusing','cold-working'],['glassblowing','cold-working'],['kiln-casting','cold-working'],['sandblasting','cold-working'],['engraving-etching','gilding'],['murrine','fusing'],['colour-glass','fusing'],['bevels','cold-working']];
+
+const byId=Object.fromEntries(SKILLS.map(s=>[s.id,s]));
+const R=42, FILL={locked:.16,learning:.5,practiced:.82,mastered:1};
+const KEY='glass-grid-progress-v1';
+let progress=(()=>{try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return{}}})();
+let selected=null, activeDisc=null;
+let view={x:0,y:0,k:1};
+
+const stateOf=id=>progress[id]||'locked';
+const isAvailable=s=>s.prereqs.every(p=>stateOf(p)==='mastered');
+function save(){try{localStorage.setItem(KEY,JSON.stringify(progress))}catch(e){}}
+function setState(id,st){progress[id]=st;save();renderGraph();renderDetail();renderProgress()}
+
+const SVGNS='http://www.w3.org/2000/svg';
+const vp=document.getElementById('viewport');
+const stage=document.getElementById('stage');
+const svg=document.getElementById('svg');
+
+function wrapLabel(name){
+  if(name.length<=15)return[name];
+  const mid=Math.floor(name.length/2);let s=name.lastIndexOf(' ',mid);
+  if(s<4)s=name.indexOf(' ',mid);if(s<0)return[name];
+  return[name.slice(0,s),name.slice(s+1)];
+}
+const dimmed=s=>activeDisc&&s.discipline!==activeDisc;
+
+function renderGraph(){
+  let h='';
+  // cross links
+  CROSS_LINKS.forEach(([a,b])=>{const sa=byId[a],sb=byId[b];if(!sa||!sb)return;
+    const faded=dimmed(sa)&&dimmed(sb);
+    h+=`<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" stroke="#9a8fb5" stroke-width="2" stroke-dasharray="3 9" stroke-linecap="round" opacity="${faded?.12:.4}"/>`;});
+  // prereq edges
+  SKILLS.forEach(s=>s.prereqs.forEach(pid=>{const f=byId[pid];if(!f)return;
+    const lit=stateOf(pid)==='mastered';const faded=dimmed(s)&&dimmed(f);const d=DISCIPLINES[s.discipline];
+    h+=`<g opacity="${faded?.15:1}"><line x1="${f.x}" y1="${f.y}" x2="${s.x}" y2="${s.y}" stroke="#14101f" stroke-width="${lit?8:6}" stroke-linecap="round"/>`+
+       `<line x1="${f.x}" y1="${f.y}" x2="${s.x}" y2="${s.y}" stroke="${lit?d.glow:'#b8ac93'}" stroke-width="${lit?4:2.5}" stroke-linecap="round" opacity="${lit?.95:.55}"/></g>`;}));
+  // nodes
+  SKILLS.forEach(s=>{const d=DISCIPLINES[s.discipline];const st=stateOf(s.id);const avail=isAvailable(s);
+    const faded=dimmed(s);const sel=selected===s.id;const mastered=st==='mastered';const ready=st==='locked'&&avail;
+    const lines=wrapLabel(s.name);
+    h+=`<g class="node-group" data-id="${s.id}" transform="translate(${s.x} ${s.y})" opacity="${faded?.28:1}">`;
+    if(mastered)h+=`<circle r="${R+6}" fill="none" stroke="${d.glow}" stroke-width="5" opacity="0.55" filter="url(#nodeGlow)"/>`;
+    if(ready)h+=`<circle r="${R+5}" fill="none" stroke="${d.glow}" stroke-width="2.5" stroke-dasharray="4 6" opacity="0.7"/>`;
+    if(sel)h+=`<circle r="${R+11}" fill="none" stroke="#E0A526" stroke-width="3.5"/>`;
+    h+=`<circle r="${R}" fill="${d.color}" fill-opacity="${FILL[st]}" stroke="#14101f" stroke-width="4" stroke-dasharray="${st==='locked'&&!avail?'5 5':'0'}" ${mastered?'filter="url(#nodeGlow)"':''}/>`;
+    if(s.hub)h+=`<circle r="${R-12}" fill="none" stroke="#14101f" stroke-width="2" opacity="0.4"/>`;
+    h+=`<text class="node-label ${st==='locked'&&!avail?'dim':''}" text-anchor="middle" y="${R+22}">`;
+    lines.forEach((ln,i)=>{h+=`<tspan x="0" dy="${i===0?0:17}">${ln}</tspan>`;});
+    h+=`</text></g>`;});
+  vp.innerHTML=h;
+}
+function applyView(){vp.setAttribute('transform',`translate(${view.x} ${view.y}) scale(${view.k})`);}
+
+function renderDetail(){
+  const el=document.getElementById('detail');
+  if(!selected){el.classList.remove('open');el.innerHTML='';return;}
+  const s=byId[selected];const d=DISCIPLINES[s.discipline];const cur=stateOf(s.id);const avail=isAvailable(s);
+  const met=s.prereqs.filter(p=>stateOf(p)==='mastered').length;
+  let pre;
+  if(s.prereqs.length===0)pre=`<p class="prereq-none">Nothing — this is a starting node.</p>`;
+  else pre=`<ul class="prereq-list">`+s.prereqs.map(p=>{const m=stateOf(p)==='mastered';
+    return `<li class="prereq-item ${m?'met':'unmet'}" data-goto="${p}"><span class="tick">${m?'✓':'○'}</span>${byId[p].name}</li>`;}).join('')+`</ul>`;
+  const stbtns=STATES.map(x=>`<button class="state-btn ${x} ${cur===x?'active':''}" data-set="${x}">${STATE_META[x].label}</button>`).join('');
+  const note=s.prereqs.length?`<p class="avail-note ${avail?'ready':''}">${avail?'✓ All prerequisites mastered — you’re ready to take this on.':'In progress: '+met+'/'+s.prereqs.length+' prerequisites mastered.'}</p>`:'';
+  el.innerHTML=`<button class="detail-close" id="detail-close" aria-label="Close">×</button>
+    <div class="detail-top"><span class="detail-disc" style="color:${d.color}"><span class="legend-swatch" style="background:${d.color}"></span>${d.label}</span><h2>${s.name}</h2></div>
+    <div class="detail-body"><p class="detail-summary">${s.summary}</p><p class="detail-details">${s.details}</p>
+    <p class="detail-section-label">Builds on</p>${pre}
+    <p class="detail-section-label">Your progress</p><div class="state-buttons">${stbtns}</div>${note}</div>`;
+  el.classList.add('open');
+  el.querySelector('#detail-close').onclick=()=>{selected=null;renderDetail();renderGraph();};
+  el.querySelectorAll('[data-set]').forEach(b=>b.onclick=()=>setState(s.id,b.dataset.set));
+  el.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{selected=b.dataset.goto;renderDetail();renderGraph();});
+}
+
+function renderLegend(){
+  const el=document.getElementById('legend');
+  let h='<h3>Disciplines</h3>';
+  Object.values(DISCIPLINES).forEach(d=>{h+=`<div class="legend-row ${activeDisc&&activeDisc!==d.id?'muted':''}" data-disc="${d.id}"><span class="legend-swatch" style="background:${d.color}"></span>${d.label}</div>`;});
+  h+='<div class="legend-divider"></div><h3>Progress</h3>';
+  [['Not started','rgba(120,110,140,0.25)'],['Learning','#B23A4C'],['Practiced','#2E9B6B'],['Mastered','#E0A526']].forEach(([l,c])=>{
+    h+=`<div class="legend-state"><span class="legend-dot" style="background:${c}"></span>${l}</div>`;});
+  el.innerHTML=h;
+  el.querySelectorAll('[data-disc]').forEach(b=>b.onclick=()=>{activeDisc=activeDisc===b.dataset.disc?null:b.dataset.disc;renderLegend();renderGraph();});
+}
+
+function renderProgress(){
+  const c={locked:0,learning:0,practiced:0,mastered:0};
+  SKILLS.forEach(s=>c[stateOf(s.id)]++);const T=SKILLS.length;const p=n=>(n/T*100)+'%';
+  document.getElementById('seg-mastered').style.width=p(c.mastered);
+  document.getElementById('seg-practiced').style.width=p(c.practiced);
+  document.getElementById('seg-learning').style.width=p(c.learning);
+  document.getElementById('progress-text').textContent=`${c.mastered} mastered · ${c.practiced} practiced · ${c.learning} learning`;
+  document.getElementById('progress-count').textContent=`${c.mastered}/${T}`;
+}
+
+// ---- pan / zoom (mouse + touch + pinch) ----
+function fit(){
+  const r=stage.getBoundingClientRect();const xs=SKILLS.map(s=>s.x),ys=SKILLS.map(s=>s.y);const pad=90;
+  const minX=Math.min(...xs)-pad,minY=Math.min(...ys)-pad,maxX=Math.max(...xs)+pad,maxY=Math.max(...ys)+pad;
+  const cw=maxX-minX,ch=maxY-minY;const k=Math.min(r.width/cw,r.height/ch);
+  view={k,x:(r.width-cw*k)/2-minX*k,y:(r.height-ch*k)/2-minY*k};applyView();
+}
+function zoomAt(f,cx,cy){const k=Math.max(.3,Math.min(2.5,view.k*f));const ratio=k/view.k;
+  view={k,x:cx-(cx-view.x)*ratio,y:cy-(cy-view.y)*ratio};applyView();}
+
+const pointers=new Map();let panStart=null,moved=false,lastDist=0,lastMid=null;
+stage.addEventListener('pointerdown',e=>{pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});moved=false;
+  if(pointers.size===1){panStart={px:e.clientX,py:e.clientY,vx:view.x,vy:view.y};stage.classList.add('panning');}
+  else if(pointers.size===2){const p=[...pointers.values()];lastDist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+    lastMid={x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};panStart=null;}});
+stage.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){const p=[...pointers.values()];const dist=Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);
+    const r=stage.getBoundingClientRect();const mid={x:(p[0].x+p[1].x)/2-r.left,y:(p[0].y+p[1].y)/2-r.top};
+    if(lastDist)zoomAt(dist/lastDist,mid.x,mid.y);lastDist=dist;moved=true;return;}
+  if(panStart){const dx=e.clientX-panStart.px,dy=e.clientY-panStart.py;
+    if(Math.hypot(dx,dy)>4)moved=true;view.x=panStart.vx+dx;view.y=panStart.vy+dy;applyView();}});
+function upPointer(e){pointers.delete(e.pointerId);if(pointers.size<2)lastDist=0;
+  if(pointers.size===0){panStart=null;stage.classList.remove('panning');}}
+stage.addEventListener('pointerup',upPointer);
+stage.addEventListener('pointercancel',upPointer);
+stage.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')upPointer(e);});
+
+svg.addEventListener('wheel',e=>{e.preventDefault();const r=stage.getBoundingClientRect();
+  zoomAt(e.deltaY<0?1.12:1/1.12,e.clientX-r.left,e.clientY-r.top);},{passive:false});
+
+svg.addEventListener('click',e=>{if(moved)return;const g=e.target.closest('[data-id]');
+  if(g){selected=g.dataset.id;renderDetail();renderGraph();}});
+
+document.getElementById('zoom-in').onclick=()=>zoomAt(1.2,stage.clientWidth/2,stage.clientHeight/2);
+document.getElementById('zoom-out').onclick=()=>zoomAt(1/1.2,stage.clientWidth/2,stage.clientHeight/2);
+document.getElementById('reset-btn').onclick=()=>{if(confirm('Reset all progress? This clears every skill back to "Not started".')){progress={};save();renderGraph();renderDetail();renderProgress();}};
+window.addEventListener('resize',()=>{});
+
+renderLegend();renderGraph();renderProgress();fit();
+</script>
+</body>
+</html>
