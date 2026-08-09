@@ -496,3 +496,38 @@ def test_asking_in_words_reaches_the_alignment():
     ):
         assert talk.get_path(talk.respond(phrase, {}).spec, "placement.align") == "shape", phrase
     assert talk.get_path(talk.respond("tile it four across", {}).spec, "placement.align") is None
+
+
+def test_alignment_reads_the_subject_not_the_cut_out():
+    """A tracery has no broad end, so it cannot say which way the artwork points.
+
+    Found on a real leaf photo: the vein mask's axis read 188° where the leaf
+    itself read 355°, because veins are branches and gaps and the third moment
+    that settles a bare axis end-for-end is meaningless on them. Aligning to
+    the tracery turned the artwork most of the way round.
+    """
+    photo = art.overlay_veined_orchid()
+    veins = segment.texture_mask(photo)
+    subject = masks.largest_component(
+        masks.fill_holes(masks.invert(segment.background_mask(photo)))
+    )
+
+    vein_axis = masks.principal_axis(veins)
+    subject_axis = masks.principal_axis(subject)
+    assert vein_axis is not None and subject_axis is not None
+
+    # Whatever the two say, compose must be using the subject's answer.
+    base = _leaf(100)
+    result = compose(
+        base, photo,
+        ComposeSpec(
+            keep="keep the veins",
+            placement=Placement(fit="cover", align="shape"),
+        ),
+    )
+    turned = [n for n in result.notes if "Turned the artwork" in n]
+    if turned:
+        used = float(turned[0].split("(")[1].split("°")[0])
+        assert abs(used - subject_axis[0]) < 1.0, (
+            f"aligned from {used:.0f}° — the tracery, not the subject at {subject_axis[0]:.0f}°"
+        )

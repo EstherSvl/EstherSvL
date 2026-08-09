@@ -286,8 +286,20 @@ difference. It reports the angle it used. An axis has no direction, so which end
 is the tip is settled by where the mass sits: a leaf, a petal and a teardrop are
 all broad at one end and pointed at the other.
 
+The angle is read from the overlay's **subject**, not from what was cut out of
+it. A tracery of veins has no broad end, so the third moment that settles which
+way round a bare axis runs is meaningless on it — on a real leaf photo the vein
+mask read 188° where the leaf itself read 355°, and aligning to the tracery
+turned the artwork most of the way round.
+
 If either shape is too round to have a long axis, there is nothing to line up;
 the tool says so and leaves the artwork alone rather than turning it by noise.
+
+**What this does not do.** It matches the overall axis, not the vein geometry.
+If the base shape's midrib is a curve off to one side and the photograph's is a
+straight line up the middle, the orientation and the size will be right and the
+two midribs still will not coincide. Bending one to the other is a warp, not a
+rotation, and is a different piece of work.
 
 In the browser it is a checkbox, and in the chat any of *"rotate it to match the
 base"*, *"align it with the shape"*, *"line the veins up with the leaf"*.

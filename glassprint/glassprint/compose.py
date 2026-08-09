@@ -331,7 +331,7 @@ def _build_layer(
 
     placement = layer.placement
     if placement.align == "shape":
-        placement = _aligned(placement, shaped, cutout, notes)
+        placement = _aligned(placement, shaped, _silhouette(overlay, backends), notes)
         layer = dataclass_replace(layer, placement=placement)
 
     if layer.placement.per_piece:
@@ -420,6 +420,23 @@ def _build_layer(
 
 #: Below this, a silhouette is round enough that its "long axis" is noise.
 MIN_ELONGATION = 1.12
+
+
+def _silhouette(overlay: Raster, backends: Backends) -> np.ndarray:
+    """The outline of the thing the artwork is a picture of.
+
+    Not the cut-out, which is what gets printed and is often a sparse tracery.
+    A leaf's veins spread across the leaf but they are branches and gaps, so the
+    "broad end" that settles which way round an axis runs is meaningless on
+    them: on a real leaf photo the vein mask read 188 degrees where the leaf
+    itself read 355, and aligning to it turned the artwork most of the way round.
+    Which way the artwork *points* is a property of the subject.
+    """
+    if overlay.has_alpha:
+        return masks.clean(overlay.alpha_f)
+    return masks.largest_component(
+        masks.fill_holes(masks.invert(segment.background_mask(overlay, backends=backends)))
+    )
 
 
 def _aligned(
