@@ -102,6 +102,34 @@ def largest_component(mask: np.ndarray, threshold: float = 0.5) -> np.ndarray:
     return clean(mask) * (labels == winner).astype(np.float32)
 
 
+def components(
+    mask: np.ndarray, threshold: float = 0.5, min_area_fraction: float = 0.0002
+) -> list[np.ndarray]:
+    """Each separate region of the mask, on its own, largest first.
+
+    For artwork that goes onto one object this is never needed. For a cut
+    layout — a sheet of glass pieces to be printed and then assembled — it is
+    the whole thing: each piece wants its own copy of the pattern, sized and
+    centred on itself, not a fragment of one pattern spanning the sheet.
+    """
+    binary = binarize(mask, threshold)
+    if not binary.any():
+        return []
+    labels, count = ndimage.label(binary)
+    if count <= 1:
+        return [clean(mask)]
+
+    floor = min_area_fraction * mask.size
+    sizes = ndimage.sum(binary, labels, index=np.arange(1, count + 1))
+    order = np.argsort(sizes)[::-1]
+    found = [
+        clean(mask) * (labels == int(index) + 1).astype(np.float32)
+        for index in order
+        if sizes[index] >= floor
+    ]
+    return found or [clean(mask)]
+
+
 def component_count(mask: np.ndarray, threshold: float = 0.5) -> int:
     binary = binarize(mask, threshold)
     if not binary.any():

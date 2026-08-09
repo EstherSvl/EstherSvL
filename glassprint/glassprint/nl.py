@@ -36,6 +36,11 @@ _STOPWORDS = {
     "elements", "element", "everything", "anything", "stuff", "colour",
     "color", "colours", "colors", "and", "its", "it", "is", "are", "that",
     "which", "this", "these", "those",
+    # Words for "a thing" that name nothing. Without these, "the light blue
+    # shapes" looked like an object to go hunting for, and fell back to the
+    # colour hint — which is "blue" for both the light and the dark glass.
+    "shape", "shapes", "piece", "pieces", "glass", "panel", "panels",
+    "section", "sections", "bits", "one", "ones",
 }
 
 _BACKGROUND_WORDS = {"background", "backgrounds", "backdrop", "bg", "ground"}
@@ -133,7 +138,13 @@ def _selector_for(phrase: str, tolerance: float) -> Selector | None:
     other = [w for w in words if w not in COLOR_WORDS and w not in TONE_BANDS]
 
     if color_words and not other:
-        return Selector("color", color_words[0], tolerance=tolerance)
+        # "light blue" is one colour, not a colour and a brightness. Layered
+        # glass is routinely two shades of one hue, and telling them apart is
+        # the difference between printing on the right piece and the wrong one.
+        return Selector(
+            "color", color_words[0], tolerance=tolerance,
+            tone=tone_words[0] if tone_words else None,
+        )
     if tone_words and not other:
         return Selector("tone", tone_words[0], tolerance=tolerance)
     if re.fullmatch(r"#[0-9a-f]{3,8}", cleaned):

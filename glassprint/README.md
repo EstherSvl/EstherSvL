@@ -267,6 +267,40 @@ Two things worth pairing it with:
   about three quarters; what survives is coherent bokeh structure that no area
   filter will catch. Cropping to the bloom is the reliable answer.
 
+### A cut layout, not a single object
+
+A sheet of glass parts nested for the printer bed is a different job from one
+panel. The pieces are neighbours on the bed and nowhere near each other in the
+finished piece, so a pattern spanning the sheet gives each of them an arbitrary
+slice of it — which looks like artwork right up until you assemble it.
+
+```bash
+glassprint compose cut-layout.png orchid.jpg \
+  --keep "keep the veins" \
+  --target describe --target-describe "the light blue shapes" \
+  --per-piece --fit cover \
+  --color "#1b3f8f" --color-mode tint \
+  --tolerance 1.8 --fade-cutoff 0.3
+```
+
+- **`--per-piece`** gives every separate region of the target its own copy of
+  the artwork, sized and centred on that region. Three flowers get three vein
+  bursts, each radiating from its own centre, instead of three fragments.
+- **`--target-describe "the light blue shapes"`** now works on two shades of one
+  hue. Light and dark used to be absolute brightness bands, which is wrong for
+  glass: on a layered piece both blues are pale — 0.80 and 0.45 luminance — so a
+  band running to 0.38 called neither of them dark and the darker glass selected
+  as nothing at all. The words are read relative to the shades actually present,
+  so they mean *the lighter one* and *the darker one*. If only one shade of that
+  colour is there, all of it is selected and the tool says why.
+- **Words like *shapes*, *pieces*, *glass*, *panels*** name nothing, and used to
+  turn the phrase into an object hunt that fell back to the colour hint — which
+  is "blue" for both blues. They are ignored now.
+- **Parts drawn as outlines on a white page** — the usual way a cut file looks —
+  cannot be picked by colour, because they are the same white as the page.
+  `--keep "remove the background"` gets them: the page reaches the border and the
+  pieces do not, so everything enclosed by an outline survives.
+
 ### When the background cannot be removed by colour
 
 Some artwork cannot be cut out this way, and the tool now says so rather than

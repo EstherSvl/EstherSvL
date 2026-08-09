@@ -298,3 +298,112 @@ def test_the_vein_print_puts_ink_on_almost_none_of_the_glass():
     # in the band that the printer would silently drop.
     faint = ((ink > 0.02) & (ink < 0.5)).sum()
     assert faint == 0, f"{faint} pixels of ink sit below the print cliff"
+
+
+# --- a cut layout, not a single object --------------------------------------
+
+
+def _cut_sheet() -> Raster:
+    """Three flowers' worth of glass parts nested for the printer bed.
+
+    Two shades of one hue, because a layered piece is routinely built that way;
+    white parts drawn as outlines on a white page, because that is what a cut
+    file looks like; and green parts that must be left alone.
+    """
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGBA", (900, 600), (255, 255, 255, 255))
+    draw = ImageDraw.Draw(image)
+    for x in (120, 380, 640):
+        draw.ellipse((x, 60, x + 150, 210), fill=(185, 205, 245, 255), outline=(40, 40, 40, 255))
+        draw.ellipse((x + 40, 250, x + 110, 320), fill=(58, 128, 190, 255), outline=(40, 40, 40, 255))
+        draw.ellipse((x, 360, x + 150, 470), fill=(255, 255, 255, 255), outline=(40, 40, 40, 255))
+        draw.ellipse((x + 20, 500, x + 130, 570), fill=(94, 205, 62, 255), outline=(40, 40, 40, 255))
+    return Raster(np.array(image, dtype=np.uint8), dpi=(300.0, 300.0))
+
+
+def test_two_shades_of_one_colour_are_told_apart():
+    """"Light blue" and "dark blue" are not absolute brightnesses.
+
+    On a layered piece both blues are pale — 0.80 and 0.45 luminance — so a band
+    running to 0.38 calls neither of them dark, and the darker glass selects as
+    nothing at all. The words mean the lighter and the darker of whatever shades
+    are actually here.
+    """
+    from glassprint import nl
+
+    sheet = _cut_sheet()
+    light = segment.evaluate(nl.build_plan("the light blue shapes", sheet), sheet)
+    dark = segment.evaluate(nl.build_plan("the dark blue shapes", sheet), sheet)
+
+    assert light.mean() > 0.01 and dark.mean() > 0.001
+    assert not np.allclose(light, dark), "the two shades came back identical"
+    # Each names three pieces, one per flower, and they do not overlap.
+    assert masks.component_count(masks.despeckle(light, 0.0004)) == 3
+    assert masks.component_count(masks.despeckle(dark, 0.0004)) == 3
+    assert float(masks.intersect(light, dark).mean()) < 0.001
+
+
+def test_a_generic_noun_is_not_an_object_to_go_hunting_for():
+    """"Shapes" and "pieces" name nothing; they used to force a model lookup."""
+    from glassprint import nl
+
+    for phrase in ("the light blue shapes", "the dark blue pieces", "the green glass"):
+        assert nl.parse(phrase).ops[0].selector.kind == "color", phrase
+
+
+def test_one_shade_present_selects_all_of_it_and_says_so():
+    """Nothing to choose between is a fact worth stating, not a half to guess."""
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGBA", (300, 300), (255, 255, 255, 255))
+    ImageDraw.Draw(image).ellipse((60, 60, 240, 240), fill=(58, 128, 190, 255))
+    one_shade = Raster(np.array(image, dtype=np.uint8), dpi=(300.0, 300.0))
+
+    backends = segment.Backends()
+    found = segment.resolve(
+        segment.Selector("color", "blue", tone="dark"), one_shade, backends
+    )
+    assert found.mean() > 0.1
+    assert any("only one shade" in note.lower() for note in backends.notes), backends.notes
+
+
+def test_each_piece_of_a_cut_layout_gets_the_whole_pattern():
+    """A sheet of parts is not one object.
+
+    The pieces are neighbours on the printer bed and nowhere near each other in
+    the finished piece, so one pattern spanning the sheet gives each of them an
+    arbitrary slice — which looks like artwork until you assemble it.
+    """
+    sheet = _cut_sheet()
+    art = art_module.overlay_veined_orchid()
+    spec = ComposeSpec(
+        keep="keep the veins",
+        target="describe", target_describe="the light blue shapes",
+        placement=Placement(fit="cover"),
+    )
+
+    spanning = compose(sheet, art, spec)
+    per_piece = compose(
+        sheet, art,
+        ComposeSpec(**{**spec.__dict__, "placement": Placement(fit="cover", per_piece=True)}),
+    )
+
+    assert any("separately on each" in note for note in per_piece.notes), per_piece.notes
+
+    # Each piece should carry a comparable amount of pattern. Spanning one
+    # pattern across three pieces cannot manage that.
+    def spread(result):
+        ink = result.overlay_layer.rgba[:, :, 3].astype(np.float32) / 255.0
+        shares = [
+            float((ink * piece).sum()) / max(float(piece.sum()), 1.0)
+            for piece in masks.components(result.shape_mask, threshold=0.35)
+        ]
+        return max(shares) / max(min(shares), 1e-6)
+
+    assert spread(per_piece) < spread(spanning), (
+        "per-piece placement did not even out the pattern across the pieces"
+    )
+
+
+art_module = art

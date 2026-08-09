@@ -25,10 +25,16 @@ class Selector:
     value: str | None = None
     tolerance: float = 1.0
     color_hint: str | None = None
+    #: A brightness word narrowing a colour: "light blue" is blue *and* light.
+    #: Two pieces of glass can be the same hue and different colours, which is
+    #: the whole basis of a layered piece, so the tool has to be able to say so.
+    tone: str | None = None
 
     def describe(self) -> str:
         if self.kind in {"all", "rest"}:
             return self.kind
+        if self.value and self.tone:
+            return f"{self.kind}:{self.tone} {self.value}"
         if self.value:
             return f"{self.kind}:{self.value}"
         return self.kind
@@ -348,9 +354,16 @@ def texture_mask(
     elif polarity == "dark":
         detail = -lighter
     else:
-        # Whichever way round the markings run. Veins on a petal are pale; the
-        # veins on a leaf, and any ink drawing, are the other way up.
-        detail = lighter if np.percentile(lighter, 99.7) >= np.percentile(-lighter, 99.7) else -lighter
+        # Whichever way round the markings run. Veins on a petal may be pale or
+        # dark; an ink drawing is always the other way up from its paper.
+        #
+        # Judged at the 98th percentile and not higher. A photograph's very
+        # brightest local contrast is the rim of the subject against the blur
+        # behind it, and there are only a few hundred such pixels — enough to
+        # own the extreme tail and decide the question, and nothing to do with
+        # the markings. On a real orchid that inverted the choice and returned
+        # the gaps between the veins instead of the veins.
+        detail = lighter if np.percentile(lighter, 98) >= np.percentile(-lighter, 98) else -lighter
 
     peak = float(np.percentile(detail, 99.5))
     if peak <= 1e-5:
@@ -369,6 +382,67 @@ def texture_mask(
     # of the glass you wanted clear. A marking is a connected run of pixels and
     # a grain speck is three, so the specks go by area.
     return masks.despeckle(mask, min_area_fraction=0.00004, threshold=0.4) * mask
+
+
+#: Brightness words, and which end of the range they mean.
+_SHADE_WORDS = {
+    "light": "high", "lights": "high", "pale": "high", "bright": "high",
+    "highlight": "high", "highlights": "high",
+    "dark": "low", "darks": "low", "deep": "low", "shadow": "low", "shadows": "low",
+}
+
+
+def _shade_of(
+    raster: Raster, hue: np.ndarray, tone: str, backends: Backends | None
+) -> np.ndarray:
+    """The lighter or darker of the shades of one colour actually present.
+
+    "Light blue" and "dark blue" are not absolute brightnesses, whatever a fixed
+    band says. On a layered piece both blues are pale — the light glass at 0.96
+    and the dark glass at 0.75, so a band running to 0.38 calls neither of them
+    dark and the darker glass selects as nothing at all. What the words mean is
+    *the lighter one* and *the darker one*, of whatever shades this artwork has.
+
+    So the blues in the image are found first, split into two groups by
+    brightness, and the named side returned. If there is only one shade of that
+    colour there is nothing to choose between, and the whole of it comes back
+    rather than an arbitrary half.
+    """
+    end = _SHADE_WORDS.get(tone)
+    values = (raster.rgb_f @ _CHANNEL_WEIGHTS)
+    inside = values[hue > 0.5]
+    if end is None or inside.size < 32:
+        return hue
+
+    # Two means over the brightnesses present, seeded at the extremes.
+    #
+    # Not at the tenth and ninetieth percentile, which is the obvious choice and
+    # wrong: on a cut layout the dark pieces are the flower centres and the
+    # light ones whole petals, so the dark glass can be a twentieth of the blue
+    # in the frame. Both seeds then start inside the light cluster, the split
+    # collapses, and the tool reports one shade where there are plainly two.
+    low, high = np.percentile(inside, 0.5), np.percentile(inside, 99.5)
+    for _ in range(30):
+        middle = (low + high) / 2.0
+        below, above = inside[inside <= middle], inside[inside > middle]
+        if not below.size or not above.size:
+            break
+        low, high = float(below.mean()), float(above.mean())
+
+    separation = high - low
+    if separation < 0.06:
+        if backends is not None:
+            backends.note(
+                f"Only one shade of that colour is here, so '{tone}' had nothing to choose "
+                "between — all of it was selected."
+            )
+        return hue
+
+    middle = (low + high) / 2.0
+    softness = max(separation * 0.25, 0.01)
+    side = (values - middle) / softness
+    keep = np.clip(side if end == "high" else -side, 0.0, 1.0)
+    return masks.clean(hue * keep.astype(np.float32))
 
 
 def resolve(
@@ -404,7 +478,10 @@ def resolve(
     if kind == "color":
         if not selector.value:
             raise ValueError("colour selector needs a value")
-        return colors.color_mask(raster.rgb_f, selector.value, tolerance=selector.tolerance)
+        found = colors.color_mask(raster.rgb_f, selector.value, tolerance=selector.tolerance)
+        if selector.tone:
+            found = _shade_of(raster, found, selector.tone, backends)
+        return found
 
     if kind == "tone":
         if not selector.value:

@@ -106,6 +106,7 @@ def compose_command(
     offset_x: float = typer.Option(0.0, "--offset-x", help="Fraction of the shape width."),
     offset_y: float = typer.Option(0.0, "--offset-y", help="Fraction of the shape height."),
     mirror: str = typer.Option("auto", "--mirror", help="auto | on | off"),
+    per_piece: bool = typer.Option(False, "--per-piece", help="Give every separate piece of the target its own copy of the artwork."),
     color: Optional[str] = typer.Option(None, "--color", "-c", help="Recolour the pattern (#hex or name)."),
     color_mode: str = typer.Option("tint", "--color-mode", help="tint | duotone | replace | mono"),
     color_from: Optional[str] = typer.Option(None, "--color-from", help="Colour to replace."),
@@ -199,6 +200,7 @@ def compose_command(
         offset_x=offset_x,
         offset_y=offset_y,
         mirror=mirror,
+        per_piece=per_piece,
     )
     spec = ComposeSpec(
         keep=keeps[0],

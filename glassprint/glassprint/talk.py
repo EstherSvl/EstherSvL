@@ -49,6 +49,7 @@ SETTABLE = {
     "placement.mirror": "whether alternate tiles mirror",
     "placement.flip_h": "horizontal flip",
     "placement.flip_v": "vertical flip",
+    "placement.per_piece": "whether each piece of the target gets its own copy",
     "color.mode": "the recolouring method",
     "color.color": "the colour",
     "color.color2": "the second colour",
@@ -281,6 +282,12 @@ def _placement(text: str, spec: dict[str, Any]) -> Iterator[Change]:
         yield Change("placement.flip_h", True, "flipped horizontally")
     if re.search(r"\bflip (?:it )?(?:vertically|upside down|top to bottom)\b", text):
         yield Change("placement.flip_v", True, "flipped vertically")
+
+    if re.search(
+        r"\b(?:on |to )?(?:each|every) (?:piece|shape|one|part)\b|\bper piece\b|"
+        r"\bseparately on each\b|\bits own copy\b", text
+    ):
+        yield Change("placement.per_piece", True, "a separate copy on each piece")
 
     step = 0.2 if re.search(r"\ba lot\b|\bmuch\b|\bright\s+(?:up|down|over)\b", text) else 0.08
     move = re.search(r"\b(?:move|nudge|shift|push)\b[^.]{0,20}?\b(left|right|up|down)\b", text)
@@ -849,7 +856,7 @@ def _coerce(path: str, raw: str) -> Any:
     value = (raw or "").strip()
     if path in {
         "clip_to_shape", "placement.flip_h", "placement.flip_v",
-        "fade.per_element", "glaze.enabled",
+        "placement.per_piece", "fade.per_element", "glaze.enabled",
     }:
         return value.lower() in {"true", "yes", "on", "1"}
     if path in {

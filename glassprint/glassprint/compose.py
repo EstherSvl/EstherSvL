@@ -329,14 +329,17 @@ def _build_layer(
     art = pattern.apply_cutout(overlay, cutout)
     art = recolor.apply(art, layer.color)
 
-    placed = pattern.place(
-        art,
-        base.size,
-        box,
-        layer.placement,
-        info,
-        target_dpi=base.effective_dpi[0],
-    )
+    if layer.placement.per_piece:
+        placed = _place_on_each(art, base, shaped, layer, info, notes)
+    else:
+        placed = pattern.place(
+            art,
+            base.size,
+            box,
+            layer.placement,
+            info,
+            target_dpi=base.effective_dpi[0],
+        )
 
     # 4. Fade into the glass, then clip to the shape and apply opacity.
     layer_alpha = placed[:, :, 3].astype(np.float32) / 255.0
@@ -408,6 +411,56 @@ def _build_layer(
         elements=faded_elements,
         name=overlay.name or "overlay",
     )
+
+
+def _place_on_each(
+    art: np.ndarray,
+    base: Raster,
+    shaped: np.ndarray,
+    layer: LayerSpec,
+    info: PatternInfo,
+    notes: list[str],
+) -> np.ndarray:
+    """One copy of the artwork per separate piece of the target.
+
+    For work that goes onto a single object the target is one region and this
+    never applies. A cut layout is the other case: a sheet of glass parts to be
+    printed flat and then assembled, where the pieces are neighbours on the bed
+    and nowhere near each other in the finished piece. Spanning one pattern
+    across the sheet gives every piece an arbitrary slice of it — which looks
+    like artwork right up until you assemble it and none of it lines up.
+
+    Each piece is measured, filled and clipped on its own, so a petal gets a
+    whole petal's worth of pattern at the size that petal wants.
+    """
+    pieces = masks.components(shaped, threshold=0.35)
+    if len(pieces) < 2:
+        piece_box = masks.bbox(shaped, threshold=0.35) or (0, 0, base.width, base.height)
+        return pattern.place(
+            art, base.size, piece_box, layer.placement, info,
+            target_dpi=base.effective_dpi[0],
+        )
+
+    notes.append(
+        f"Placed the artwork separately on each of the {len(pieces)} pieces, so every one "
+        "carries the whole pattern rather than a slice of a single big one."
+    )
+    out = np.zeros((base.height, base.width, 4), dtype=np.uint8)
+    for piece in pieces:
+        piece_box = masks.bbox(piece, threshold=0.35)
+        if piece_box is None:
+            continue
+        one = pattern.place(
+            art, base.size, piece_box, layer.placement, info,
+            target_dpi=base.effective_dpi[0],
+        )
+        # Clipped here as well as later, because otherwise each copy would run
+        # over its neighbours inside the shared bounding box.
+        one[:, :, 3] = np.clip(
+            one[:, :, 3].astype(np.float32) * piece, 0, 255
+        ).astype(np.uint8)
+        out = _blend_over(out, one, "normal") if out[:, :, 3].any() else one
+    return out
 
 
 def compose(
