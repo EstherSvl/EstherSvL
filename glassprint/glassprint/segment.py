@@ -302,6 +302,75 @@ def _too_close_to_call(background: np.ndarray, dist: np.ndarray, radius: float) 
     return float(np.median(dist[kept])) < radius * 1.5
 
 
+def texture_mask(
+    raster: Raster,
+    *,
+    polarity: str = "auto",
+    scale_px: float | None = None,
+    tolerance: float = 1.0,
+) -> np.ndarray:
+    """Fine markings, judged against their surroundings rather than the image.
+
+    For printing onto glass that already has a colour, the thing worth putting
+    down is often the *pattern* and not the field it sits on — the veining on a
+    petal, the grain in a leaf, the crazing on a glaze. Print the field as well
+    and you have covered the glass you chose.
+
+    Brightness alone cannot find those. On a photograph of a blue orchid the
+    veins are pale, but so is a blown-out corner of the background, and a single
+    threshold takes both — laying a solid slab of ink over the part of the glass
+    you most wanted to see through. What actually distinguishes a vein is that
+    it is lighter *than the petal immediately around it*, which is true in the
+    shadowed half of the flower as well as the lit one.
+
+    So this subtracts a blur of the image from the image. Whatever is left is
+    detail finer than ``scale_px``; broad tonal changes cancel, and so does the
+    background, which has nothing fine in it at all.
+    """
+    from scipy import ndimage
+
+    lum = raster.rgb_f @ _CHANNEL_WEIGHTS
+    if raster.has_alpha:
+        # Transparent regions are not dark, they are absent. Left as zeros they
+        # would ring like a bright edge all round the artwork.
+        alpha = raster.alpha_f
+        filled = ndimage.gaussian_filter(lum * alpha, 6) / np.maximum(
+            ndimage.gaussian_filter(alpha, 6), 1e-6
+        )
+        lum = np.where(alpha > 0.5, lum, filled)
+
+    sigma = scale_px if scale_px else max(1.2, min(raster.height, raster.width) / 160.0)
+    local = ndimage.gaussian_filter(lum, sigma)
+
+    lighter = lum - local
+    if polarity == "light":
+        detail = lighter
+    elif polarity == "dark":
+        detail = -lighter
+    else:
+        # Whichever way round the markings run. Veins on a petal are pale; the
+        # veins on a leaf, and any ink drawing, are the other way up.
+        detail = lighter if np.percentile(lighter, 99.7) >= np.percentile(-lighter, 99.7) else -lighter
+
+    peak = float(np.percentile(detail, 99.5))
+    if peak <= 1e-5:
+        return masks.zeros((raster.height, raster.width))
+
+    # Tolerance widens the band rather than moving it, so turning it up finds
+    # fainter markings instead of thicker ones.
+    mask = np.clip(detail / (peak * 0.55 / max(tolerance, 0.15)), 0.0, 1.0)
+    if raster.has_alpha:
+        mask = mask * (raster.alpha_f > 0.5)
+    mask = masks.clean(mask.astype(np.float32))
+
+    # Sensor grain is exactly the size this filter is looking for, so a smooth
+    # out-of-focus background answers it — faintly, but above the threshold the
+    # printer will lay ink at. That is a spray of white specks across the part
+    # of the glass you wanted clear. A marking is a connected run of pixels and
+    # a grain speck is three, so the specks go by area.
+    return masks.despeckle(mask, min_area_fraction=0.00004, threshold=0.4) * mask
+
+
 def resolve(
     selector: Selector,
     raster: Raster,
@@ -326,6 +395,11 @@ def resolve(
         if found is not None:
             return found
         return masks.invert(background_mask(raster, tolerance=selector.tolerance, backends=backends))
+
+    if kind == "texture":
+        return texture_mask(
+            raster, polarity=selector.value or "auto", tolerance=selector.tolerance
+        )
 
     if kind == "color":
         if not selector.value:

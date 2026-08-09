@@ -227,6 +227,46 @@ work exactly. Object names fall back to the colour in the phrase (so *"the red
 roses"* still works) and the tool tells you it did so, in the readout under the
 preview.
 
+### Printing the pattern and not the field
+
+When the glass already has a colour, the thing worth printing is usually the
+*markings* and not the surface they sit on. Print the field as well and you have
+covered the glass you chose.
+
+```bash
+glassprint compose glass.png orchid.jpg \
+  --keep "keep the veins" \
+  --color "#ffffff" --color-mode tint \
+  --fade-cutoff 0.5 \
+  --fit contain --scale 0.9
+```
+
+`keep the veins` — also *the veining*, *the texture*, *the grain*, *the
+markings*, *the tracery* — selects detail by how it stands out from **its own
+surroundings** rather than by how bright it is in the frame. That distinction is
+the whole point on a photograph: the veins on a blue orchid petal are pale, but
+so is a blown-out corner of the background, and a brightness threshold takes
+both — laying a solid slab of ink over the part of the glass you most wanted to
+see through. Being lighter than the petal immediately around it stays true in
+the shadowed half of the flower too, where a threshold has already given up.
+
+Say *pale veins* or *dark grain* if you want to fix which way round the markings
+run; left alone it works it out. `--tolerance` finds fainter markings rather than
+thicker ones.
+
+Two things worth pairing it with:
+
+- **`--fade-cutoff 0.5`.** A silhouette edge answers a local-contrast test too,
+  so the outline of the bloom appears as a faint halo. It sits below the alpha
+  cliff and would not print anyway — the cutoff drops it, so what you see in the
+  preview is what lays down. On the test image this took ink coverage from 7.4%
+  of the panel to 3.0%, all of it printable.
+- **A crop, or `--target`.** Out-of-focus background has no fine detail in it,
+  only sensor grain, and grain is exactly the size this filter looks for.
+  Isolated specks are removed by area, which cuts the background response by
+  about three quarters; what survives is coherent bokeh structure that no area
+  filter will catch. Cropping to the bloom is the reliable answer.
+
 ### When the background cannot be removed by colour
 
 Some artwork cannot be cut out this way, and the tool now says so rather than

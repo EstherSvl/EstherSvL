@@ -49,6 +49,15 @@ _LINE_WORDS = {
 }
 _REST_WORDS = {"everything else", "the rest", "rest", "anything else", "else"}
 
+#: Markings judged against what surrounds them rather than against the image.
+#: The words people reach for when they mean "the pattern, not the colour it is
+#: printed on" — which is the whole move when the glass already has a colour.
+_TEXTURE_WORDS = {
+    "veins", "veining", "veined", "vein", "texture", "textures", "tracery",
+    "filigree", "markings", "marking", "striations", "grain", "detail",
+    "details", "patterning", "crazing", "ridges", "fine",
+}
+
 _SPLIT_PATTERN = re.compile(r"\s*(?:,|;|/|\band\b|\balso\b|\bplus\b|\bthen\b)\s*")
 
 
@@ -105,6 +114,17 @@ def _selector_for(phrase: str, tolerance: float) -> Selector | None:
         return Selector("background", tolerance=tolerance)
     if cleaned in _SUBJECT_WORDS or any(w in _SUBJECT_WORDS for w in words):
         return Selector("subject", tolerance=tolerance)
+    if any(w in _TEXTURE_WORDS for w in words):
+        # Which way up the markings run, when the phrase says so. "The pale
+        # veins" and "the dark grain" are the same request with the contrast
+        # reversed, and guessing wrong prints the field instead of the pattern.
+        polarity = "auto"
+        if {"pale", "light", "white", "bright"} & set(words):
+            polarity = "light"
+        elif {"dark", "black", "deep"} & set(words):
+            polarity = "dark"
+        return Selector("texture", polarity, tolerance=tolerance)
+
     if any(w in _LINE_WORDS for w in words):
         return Selector("tone", "dark", tolerance=tolerance)
 

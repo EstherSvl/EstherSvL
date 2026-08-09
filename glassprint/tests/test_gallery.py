@@ -208,3 +208,93 @@ def test_a_pattern_stays_inside_a_silhouette_that_is_not_its_bounding_box():
     ink = result.overlay_layer.rgba[:, :, 3].astype(np.float32) / 255.0
     outside = float((ink * (1.0 - shape)).sum()) / max(float(ink.sum()), 1e-6)
     assert outside < 0.005, f"{outside:.1%} of the ink is off the vase"
+
+
+# --- printing the pattern and not the field ---------------------------------
+
+
+def test_texture_finds_markings_that_brightness_cannot():
+    """The case: veins on a petal, with a blown-out background in the same frame.
+
+    Both are pale, so a brightness threshold takes both and lays a solid slab of
+    ink over the part of the glass you most wanted to see through. A vein is not
+    "light", it is lighter *than the petal around it* — which stays true in the
+    shadowed half of the flower, where the threshold has given up anyway.
+    """
+    photo = art.overlay_veined_orchid()
+    bright = segment.resolve(segment.Selector("tone", "light"), photo)
+    veins = segment.texture_mask(photo)
+
+    # The background is the outer eighth of the frame; the bloom is nowhere near it.
+    edge = np.zeros(bright.shape, dtype=bool)
+    edge[: bright.shape[0] // 8, :] = edge[-bright.shape[0] // 8 :, :] = True
+    edge[:, : bright.shape[1] // 8] = edge[:, -bright.shape[1] // 8 :] = True
+
+    # Judged at the threshold the printer actually lays ink at, because that is
+    # what ends up on the glass. Below it nothing is printed either way.
+    slab = float((bright[edge] > 0.5).mean())
+    specks = float((veins[edge] > 0.5).mean())
+
+    assert slab > 0.05, "fixture no longer has a bright background to be fooled by"
+    assert specks < slab / 20, (
+        f"brightness put ink on {slab:.1%} of the background, texture on {specks:.2%}"
+    )
+    assert specks < 0.002, f"{specks:.2%} of the background would still print as specks"
+    assert float((veins > 0.5).mean()) > 0.01, "texture selection found no markings at all"
+
+
+def test_texture_reads_markings_either_way_up():
+    """Veins on a petal are pale; ink on paper is not. Same request, reversed."""
+    photo = art.overlay_veined_orchid()
+    assert segment.texture_mask(photo, polarity="light").mean() > 0
+    # Line art is dark-on-light, and 'auto' has to notice that by itself.
+    drawing = art.overlay_linework()
+    auto = segment.texture_mask(drawing)
+    dark = segment.texture_mask(drawing, polarity="dark")
+    assert np.allclose(auto, dark), "auto picked the wrong polarity for line art"
+
+
+def test_transparency_does_not_read_as_a_marking():
+    """Empty canvas is absent, not black; left as zeros it rings like an edge."""
+    sprig = art.overlay_gold_leaf()  # motif on transparency
+    veins = segment.texture_mask(sprig)
+    assert float(veins[sprig.alpha_f < 0.5].max()) < 0.01, "found markings in empty space"
+
+
+def test_asking_for_the_veins_in_words_reaches_the_texture_selector():
+    from glassprint import nl
+
+    assert nl.parse("keep the veins").ops[0].selector.kind == "texture"
+    assert nl.parse("just the pale veining").ops[0].selector.value == "light"
+    assert nl.parse("keep the dark grain").ops[0].selector.value == "dark"
+    # The words already spoken for must not be stolen.
+    assert nl.parse("remove the white background").ops[0].selector.kind == "background"
+
+
+def test_the_vein_print_puts_ink_on_almost_none_of_the_glass():
+    """The whole point: the glass supplies the colour, the ink supplies the pattern.
+
+    If this ever creeps up toward covering the panel, the tool has gone back to
+    printing the field — which is the one outcome that wastes the coloured glass.
+    """
+    from glassprint.fade import Fade
+    from glassprint.recolor import ColorSpec
+
+    result = compose(
+        art.base_coaster(), art.overlay_veined_orchid(),
+        ComposeSpec(
+            keep="keep the veins",
+            placement=Placement(fit="contain", scale=0.9),
+            color=ColorSpec(mode="tint", color="#ffffff", strength=1.0),
+            fade=Fade(mode="linear", min_alpha=1.0, max_alpha=1.0, cutoff=0.5),
+        ),
+    )
+    ink = result.overlay_layer.rgba[:, :, 3].astype(np.float32) / 255.0
+    shape = result.shape_mask
+    covered = float((ink > 0.5).sum()) / float((shape > 0.5).sum())
+    assert 0.01 < covered < 0.15, f"veins cover {covered:.1%} of the panel"
+
+    # And a cutoff means what is previewed is what lays down: nothing survives
+    # in the band that the printer would silently drop.
+    faint = ((ink > 0.02) & (ink < 0.5)).sum()
+    assert faint == 0, f"{faint} pixels of ink sit below the print cliff"

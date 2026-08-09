@@ -122,6 +122,21 @@ def base_coaster(size: int = 520) -> Raster:
     return _raster(image)
 
 
+def base_blue_glass(size: int = 560) -> Raster:
+    """Glass that already has a colour, so the ink is only there for the pattern.
+
+    The pale objects above hide a whole class of mistake: ink the colour of the
+    substrate is invisible on them. Here anything printed that should not have
+    been shows up immediately, which is the point of having one.
+    """
+    image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    ImageDraw.Draw(image).rounded_rectangle(
+        (size * 0.06, size * 0.06, size * 0.94, size * 0.94),
+        radius=size * 0.05, fill=(58, 92, 120, 255),
+    )
+    return _raster(_grain(image, 1.5, 13))
+
+
 def base_phone_case(width: int = 400, height: int = 800) -> Raster:
     """A case with a lens cutout — a hole in the alpha, not a place to print.
 
@@ -354,6 +369,7 @@ BASES = {
     "coaster": base_coaster,
     "phone-case": base_phone_case,
     "wood-tile": base_wood_tile,
+    "blue-glass": base_blue_glass,
 }
 
 OVERLAYS = {
@@ -365,3 +381,69 @@ OVERLAYS = {
     "linework": overlay_linework,
     "gold-leaf": overlay_gold_leaf,
 }
+
+
+def overlay_veined_orchid(size: int = 620) -> Raster:
+    """A bloom whose subject is its veining, not its colour.
+
+    Stands in for a real close-up: a saturated field crossed by fine pale veins,
+    a dark lip, and a blurred background behind it. The point of the fixture is
+    that the thing worth printing is *finer and lighter than its surroundings*
+    while the surroundings themselves run from near-black to near-white — so a
+    single brightness threshold cannot pick it out anywhere.
+    """
+    rng = _rng(11)
+    # bokeh: big soft blobs, some of them brighter than the petals
+    image = Image.new("RGBA", (size, size), (54, 44, 30, 255))
+    blur = ImageDraw.Draw(image)
+    for _ in range(14):
+        cx, cy = rng.uniform(0, size), rng.uniform(0, size)
+        r = rng.uniform(size * 0.10, size * 0.30)
+        tone = rng.integers(30, 210)
+        blur.ellipse((cx - r, cy - r, cx + r, cy + r),
+                     fill=(int(tone * 0.9), int(tone), int(tone * 0.6), 255))
+    image = image.filter(ImageFilter.GaussianBlur(size / 22))
+
+    centre = size * 0.5
+    petals = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(petals)
+    draw._image = petals
+    for angle in (90, 158, 226, 22, 310):
+        rad = np.deg2rad(angle)
+        _petal(draw, centre + np.cos(rad) * size * 0.21, centre - np.sin(rad) * size * 0.21,
+               size * 0.20, size * 0.24, angle - 90, (44, 108, 206, 255))
+
+    # the veins: fine pale lines radiating out and branching, drawn *into* the
+    # petals only, so nothing outside the bloom carries the pattern
+    veins = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    vein_draw = ImageDraw.Draw(veins)
+    for spoke in range(64):
+        theta = spoke / 64 * 2 * np.pi + rng.uniform(-0.03, 0.03)
+        x, y = centre, centre
+        step = size * 0.012
+        drift = rng.uniform(-0.05, 0.05)
+        for hop in range(int(size * 0.40 / step)):
+            theta += drift * 0.4 + rng.uniform(-0.05, 0.05)
+            nx, ny = x + np.cos(theta) * step, y + np.sin(theta) * step
+            vein_draw.line((x, y, nx, ny), fill=(214, 232, 255, 255),
+                           width=2 if hop < 14 else 1)
+            x, y = nx, ny
+
+    petal_alpha = np.array(petals, dtype=np.uint8)[:, :, 3]
+    vein_rgba = np.array(veins, dtype=np.uint8)
+    vein_rgba[:, :, 3] = (vein_rgba[:, :, 3].astype(np.float32)
+                          * (petal_alpha.astype(np.float32) / 255.0)).astype(np.uint8)
+    petals.alpha_composite(Image.fromarray(vein_rgba, "RGBA"))
+
+    # the lip: dark and saturated, and carrying no veining at all
+    lip = ImageDraw.Draw(petals)
+    lip.ellipse((centre - size * 0.085, centre - size * 0.05,
+                 centre + size * 0.085, centre + size * 0.11), fill=(150, 24, 92, 255))
+    lip.ellipse((centre - size * 0.045, centre - size * 0.02,
+                 centre + size * 0.045, centre + size * 0.07), fill=(38, 20, 74, 255))
+
+    image.alpha_composite(petals.filter(ImageFilter.GaussianBlur(size / 700)))
+    return _raster(_grain(image, 2.5, 12))
+
+
+OVERLAYS["veined-orchid"] = overlay_veined_orchid

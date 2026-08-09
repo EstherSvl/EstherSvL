@@ -167,6 +167,21 @@ def jobs() -> list[Job]:
             "the sprig on the wide part of the vase, not the neck",
         ),
         Job(
+            "glass-orchid-veins", "blue-glass", "veined-orchid",
+            ComposeSpec(
+                # The glass supplies the colour; the ink supplies only the
+                # pattern. Printing the petal field as well would cover the
+                # very thing the coloured glass was chosen for.
+                keep="keep the veins",
+                placement=Placement(fit="contain", scale=0.9),
+                color=ColorSpec(mode="tint", color="#ffffff", strength=1.0),
+                # Drop anything under the print cliff, so the preview shows what
+                # will actually lay down rather than a soft halo that will not.
+                fade=Fade(mode="linear", min_alpha=1.0, max_alpha=1.0, cutoff=0.5),
+            ),
+            "white vein tracery on blue glass — no ink on the petal field at all",
+        ),
+        Job(
             "coaster-glaze", "coaster", "seamless-floral",
             ComposeSpec(
                 keep=keep_bg,
