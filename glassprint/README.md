@@ -267,6 +267,31 @@ Two things worth pairing it with:
   about three quarters; what survives is coherent bokeh structure that no area
   filter will catch. Cropping to the bloom is the reliable answer.
 
+### Laying artwork along the shape it goes on
+
+"Rotate the overlay to match the base, size it to the base, line its centre vein
+up with the centre vein" is three sentences for one operation. For anything
+leaf-shaped or petal-shaped the midrib *is* the long axis of the silhouette, so
+matching the axes does all three: fitting already handles the size, and trimming
+already centres what is left.
+
+```bash
+glassprint compose leaf-icon.png leaf-photo.jpg \
+  --keep "keep the veins" --align shape --fit cover
+```
+
+`--align shape` reads the long axis of both silhouettes — an ordinary
+second-moment calculation, no model involved — and turns the artwork by the
+difference. It reports the angle it used. An axis has no direction, so which end
+is the tip is settled by where the mass sits: a leaf, a petal and a teardrop are
+all broad at one end and pointed at the other.
+
+If either shape is too round to have a long axis, there is nothing to line up;
+the tool says so and leaves the artwork alone rather than turning it by noise.
+
+In the browser it is a checkbox, and in the chat any of *"rotate it to match the
+base"*, *"align it with the shape"*, *"line the veins up with the leaf"*.
+
 ### A cut layout, not a single object
 
 A sheet of glass parts nested for the printer bed is a different job from one

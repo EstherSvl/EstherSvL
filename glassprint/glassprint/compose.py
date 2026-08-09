@@ -329,6 +329,11 @@ def _build_layer(
     art = pattern.apply_cutout(overlay, cutout)
     art = recolor.apply(art, layer.color)
 
+    placement = layer.placement
+    if placement.align == "shape":
+        placement = _aligned(placement, shaped, cutout, notes)
+        layer = dataclass_replace(layer, placement=placement)
+
     if layer.placement.per_piece:
         placed = _place_on_each(art, base, shaped, layer, info, notes)
     else:
@@ -411,6 +416,48 @@ def _build_layer(
         elements=faded_elements,
         name=overlay.name or "overlay",
     )
+
+
+#: Below this, a silhouette is round enough that its "long axis" is noise.
+MIN_ELONGATION = 1.12
+
+
+def _aligned(
+    placement: Placement, shaped: np.ndarray, cutout: np.ndarray, notes: list[str]
+) -> Placement:
+    """Turn the artwork so its long axis lies along the target's.
+
+    The thing people actually ask for, in three parts — rotate the artwork to
+    match the shape, size it to the shape, line its middle up with the middle —
+    is one operation, because for anything leaf-shaped or petal-shaped the
+    midrib *is* the long axis. Match the axes and the rest follows: fitting
+    already handles the size, and trimming already centres what is left.
+
+    No model needed either. Both silhouettes are already in hand, and the axis
+    of a shape is a second-moment calculation.
+    """
+    target = masks.principal_axis(shaped)
+    source = masks.principal_axis(cutout)
+    if target is None or source is None:
+        notes.append("Could not read a long axis on both shapes, so the artwork was left as it is.")
+        return dataclass_replace(placement, align="none")
+
+    target_angle, _, target_elongation = target
+    source_angle, _, source_elongation = source
+    roundest = min(target_elongation, source_elongation)
+    if roundest < MIN_ELONGATION:
+        notes.append(
+            f"One of the shapes is too round to have a long axis (elongation {roundest:.2f}), "
+            "so there was nothing to line up and the artwork was left as it is."
+        )
+        return dataclass_replace(placement, align="none")
+
+    turn = (target_angle - source_angle + 180.0) % 360.0 - 180.0
+    notes.append(
+        f"Turned the artwork {turn:+.0f}° to lay its long axis along the target's "
+        f"({source_angle:.0f}° to {target_angle:.0f}°)."
+    )
+    return dataclass_replace(placement, rotation=placement.rotation + turn, align="none")
 
 
 def _place_on_each(

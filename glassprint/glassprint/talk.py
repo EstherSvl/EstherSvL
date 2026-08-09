@@ -50,6 +50,7 @@ SETTABLE = {
     "placement.flip_h": "horizontal flip",
     "placement.flip_v": "vertical flip",
     "placement.per_piece": "whether each piece of the target gets its own copy",
+    "placement.align": "whether the artwork is turned to lie along the target shape",
     "color.mode": "the recolouring method",
     "color.color": "the colour",
     "color.color2": "the second colour",
@@ -288,6 +289,16 @@ def _placement(text: str, spec: dict[str, Any]) -> Iterator[Change]:
         r"\bseparately on each\b|\bits own copy\b", text
     ):
         yield Change("placement.per_piece", True, "a separate copy on each piece")
+
+    # "Rotate it to match the base", "line the veins up with the leaf" — three
+    # requests that are one operation, because for anything leaf- or petal-
+    # shaped the midrib is the long axis of the silhouette.
+    if re.search(
+        r"(?:\b(?:match|matching|follow|align|orient)\b|\bline\b[^.]{0,24}?\bup\b"
+        r")[^.]{0,30}?\b(?:shape|base|target|leaf|petal|silhouette|angle|direction|position)\b|"
+        r"\bsame (?:angle|direction|orientation)\b|\brotate to match\b", text
+    ):
+        yield Change("placement.align", "shape", "turned to lie along the target shape")
 
     step = 0.2 if re.search(r"\ba lot\b|\bmuch\b|\bright\s+(?:up|down|over)\b", text) else 0.08
     move = re.search(r"\b(?:move|nudge|shift|push)\b[^.]{0,20}?\b(left|right|up|down)\b", text)
@@ -870,6 +881,8 @@ def _coerce(path: str, raw: str) -> Any:
             return float(value)
         except ValueError:
             return None
+    if path == "placement.align":
+        return "shape" if value.lower() in {"shape", "true", "yes", "on"} else "none"
     if path == "fade.layers":
         try:
             return int(float(value))

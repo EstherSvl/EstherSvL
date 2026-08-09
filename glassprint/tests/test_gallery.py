@@ -407,3 +407,92 @@ def test_each_piece_of_a_cut_layout_gets_the_whole_pattern():
 
 
 art_module = art
+
+
+# --- laying artwork along the shape it goes on ------------------------------
+
+
+def _leaf(angle_deg: float, size: int = 500) -> Raster:
+    """A leaf silhouette at a chosen angle: broad at the base, pointed at the tip."""
+    from PIL import Image, ImageDraw
+
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    blade = Image.new("RGBA", (int(size * 0.8), int(size * 0.34)), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(blade)
+    draw.polygon(
+        [(0, blade.height // 2), (blade.width * 0.35, 0),
+         (blade.width, blade.height * 0.45), (blade.width * 0.30, blade.height)],
+        fill=(40, 130, 40, 255),
+    )
+    blade = blade.rotate(-angle_deg, expand=True, resample=Image.BICUBIC)
+    canvas.alpha_composite(
+        blade, ((size - blade.width) // 2, (size - blade.height) // 2)
+    )
+    return Raster(np.array(canvas, dtype=np.uint8), dpi=(300.0, 300.0))
+
+
+def test_the_long_axis_of_a_shape_is_found():
+    """A leaf's midrib is its long axis, and that needs no model to locate."""
+    for angle in (0, 30, 75, 120):
+        found = masks.principal_axis(_leaf(angle).alpha_f)
+        assert found is not None
+        measured, _, elongation = found
+        assert elongation > 1.2, f"a leaf should read as elongated, got {elongation:.2f}"
+        # The axis is recovered modulo the 180° a bare axis cannot resolve.
+        off = min((measured - angle) % 180.0, (angle - measured) % 180.0)
+        assert off < 12.0, f"axis off by {off:.0f}° at {angle}°"
+
+
+def test_a_round_shape_has_no_axis_to_align_to():
+    """A circle's "long axis" is noise, and acting on it would be worse than not."""
+    from PIL import Image, ImageDraw
+
+    canvas = Image.new("RGBA", (400, 400), (0, 0, 0, 0))
+    ImageDraw.Draw(canvas).ellipse((80, 80, 320, 320), fill=(40, 130, 40, 255))
+    disc = Raster(np.array(canvas, dtype=np.uint8), dpi=(300.0, 300.0))
+
+    _, _, elongation = masks.principal_axis(disc.alpha_f)
+    assert elongation < masks.MIN_ELONGATION if hasattr(masks, "MIN_ELONGATION") else True
+
+    result = compose(
+        disc, _leaf(40),
+        ComposeSpec(placement=Placement(fit="contain", align="shape")),
+    )
+    assert any("too round" in note for note in result.notes), result.notes
+
+
+def test_artwork_is_turned_to_lie_along_the_target():
+    """The three things asked for at once — rotate to match, size to it, line the
+    middles up — are one operation, because the midrib is the long axis."""
+    base = _leaf(115)
+    art = _leaf(20)
+
+    aligned = compose(base, art, ComposeSpec(placement=Placement(fit="contain", align="shape")))
+    assert any("Turned the artwork" in note for note in aligned.notes), aligned.notes
+
+    # The placed artwork should now share the base's axis, which it did not before.
+    def axis_of(result):
+        return masks.principal_axis(
+            result.overlay_layer.rgba[:, :, 3].astype(np.float32) / 255.0
+        )[0]
+
+    target = masks.principal_axis(base.alpha_f)[0]
+    plain = compose(base, art, ComposeSpec(placement=Placement(fit="contain")))
+
+    def gap(measured):
+        return min((measured - target) % 180.0, (target - measured) % 180.0)
+
+    assert gap(axis_of(aligned)) < gap(axis_of(plain)), "alignment did not improve the angle"
+    assert gap(axis_of(aligned)) < 12.0
+
+
+def test_asking_in_words_reaches_the_alignment():
+    from glassprint import talk
+
+    for phrase in (
+        "rotate the overlay to match the base leaf",
+        "align it with the shape",
+        "line the veins up with the leaf",
+    ):
+        assert talk.get_path(talk.respond(phrase, {}).spec, "placement.align") == "shape", phrase
+    assert talk.get_path(talk.respond("tile it four across", {}).spec, "placement.align") is None

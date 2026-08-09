@@ -128,6 +128,7 @@ def build_placement(data: dict[str, Any]) -> Placement:
         mirror=str(data.get("mirror") or "auto"),
         flip_h=bool(data.get("flip_h")),
         flip_v=bool(data.get("flip_v")),
+        align=str(data.get("align") or "none"),
         per_piece=bool(data.get("per_piece")),
     )
 

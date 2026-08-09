@@ -7,6 +7,8 @@ artefacts on curves, which a UV printer reproduces faithfully.
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from PIL import Image, ImageFilter
 from scipy import ndimage
@@ -100,6 +102,53 @@ def largest_component(mask: np.ndarray, threshold: float = 0.5) -> np.ndarray:
     sizes = ndimage.sum(binary, labels, index=np.arange(1, count + 1))
     winner = int(np.argmax(sizes)) + 1
     return clean(mask) * (labels == winner).astype(np.float32)
+
+
+def principal_axis(mask: np.ndarray) -> tuple[float, tuple[float, float], float] | None:
+    """The long axis of a shape: its angle, its centre, and how elongated it is.
+
+    A leaf's midrib *is* its long axis, and so is the spine of a petal or the
+    run of a vase. That is what makes this useful for registration: to lay the
+    veins of a photographed leaf onto a drawn leaf you do not need to find the
+    midrib in either picture, you need the axis of each silhouette, which is an
+    ordinary second-moment calculation and needs no model.
+
+    The angle is in degrees, measured clockwise from horizontal in image
+    coordinates (y downward). Elongation is the ratio of the long axis to the
+    short one: 1.0 is a circle, where the angle means nothing at all.
+    """
+    ys, xs = np.nonzero(mask > 0.5)
+    if ys.size < 16:
+        return None
+
+    weights = mask[ys, xs].astype(np.float64)
+    total = weights.sum()
+    if total <= 0:
+        return None
+
+    cx = float((xs * weights).sum() / total)
+    cy = float((ys * weights).sum() / total)
+    x, y = xs - cx, ys - cy
+
+    xx = float((weights * x * x).sum() / total)
+    yy = float((weights * y * y).sum() / total)
+    xy = float((weights * x * y).sum() / total)
+
+    angle = 0.5 * math.atan2(2.0 * xy, xx - yy)
+    # Eigenvalues of the covariance, for how much of an axis this really is.
+    spread = math.sqrt(max((xx - yy) ** 2 + 4.0 * xy * xy, 0.0))
+    major, minor = (xx + yy + spread) / 2.0, (xx + yy - spread) / 2.0
+    elongation = math.sqrt(major / minor) if minor > 1e-9 else float("inf")
+
+    # An axis has no direction, so a leaf could come out end for end. Which end
+    # is which is settled by where the mass sits: a leaf, a petal and a teardrop
+    # are all broad at one end and pointed at the other.
+    along = x * math.cos(angle) + y * math.sin(angle)
+    skew = float((weights * along**3).sum() / total)
+    if skew > 0:
+        angle += math.pi
+
+    return math.degrees(angle) % 360.0, (cx, cy), elongation
 
 
 def components(

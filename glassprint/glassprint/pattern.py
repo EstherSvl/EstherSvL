@@ -34,6 +34,9 @@ class Placement:
     mirror: str = "auto"                 # auto | on | off
     flip_h: bool = False
     flip_v: bool = False
+    #: Turn the artwork so its long axis lies along the target's. "shape" reads
+    #: both silhouettes and works out the angle; "none" leaves rotation to you.
+    align: str = "none"
     #: Give every separate piece of the target its own copy of the artwork,
     #: sized and centred on that piece. For a cut layout — a sheet of glass
     #: parts to be printed and then assembled — this is the difference between

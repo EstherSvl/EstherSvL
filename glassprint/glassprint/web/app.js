@@ -87,6 +87,7 @@ function buildSpec() {
     mirror: $("mirror").value,
     flip_h: $("flip-h").checked,
     flip_v: $("flip-v").checked,
+    align: $("align-shape").checked ? "shape" : "none",
     per_piece: $("per-piece").checked,
   };
   const color = {
@@ -381,6 +382,7 @@ const SPEC_FIELDS = {
   "placement.flip_h": "flip-h",
   "placement.flip_v": "flip-v",
   "placement.per_piece": "per-piece",
+  "placement.align": "align-shape",
   "color.mode": "color-mode",
   "color.color": "color-hex",
   "color.color2": "color2-hex",
