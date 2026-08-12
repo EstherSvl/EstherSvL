@@ -507,6 +507,38 @@ next year matches too.
 Dot area is faithful to the ramp (asking for 25% coverage lays down 25.3%), and
 100% is genuinely solid, so the top of a gradient is untouched artwork.
 
+## Checking a file before you print it
+
+```bash
+glassprint prepare petal.png                    # just tell me what I will lose
+glassprint prepare petal.png -o petal-flat.png  # and fix it
+```
+
+Art software fades things by making them transparent. The E1 cannot: at each
+spot it fires a drop or it does not, and under about 50% coverage it fires none
+— measured twice on this printer, see `fade.ALPHA_CLIFF`. So an airbrushed
+falloff prints as ink that stops dead partway along.
+
+With a white underbase it is worse, because Studio generates the underbase from
+the same alpha. The white ramps too, and white and colour do not give up at
+quite the same place, so there is a band where colour lands with little or no
+white behind it. On clear or opal material that reads as a transparent tint
+against an opaque pastel — the mottled edge you get instead of a fade.
+
+`prepare` reports how much of the artwork is under the cliff, and `--out` writes
+a version that carries the gradient in the **colour** with every pixel of the
+piece fully opaque. Same picture against the ground; nothing left for the cliff
+to eat. On a soft airbrushed blob that takes the unprintable fraction from about
+70% to under 10% — the remainder being the anti-aliased cut line, which is a
+pixel or two wide and is meant to be there.
+
+`--ground` is what the gradient fades *into*: white for a white underbase, or
+the glass colour if you are printing without one.
+
+The same thing said in Procreate: put an opaque silhouette of the finished shape
+under the artwork and flatten onto it before exporting. The only transparency
+left in the file should be outside the cut line.
+
 ## Printing without a white base
 
 Leaving the white underbase off changes what a fade does, and mostly for the

@@ -89,6 +89,46 @@ def mask(
     _echo_notes(backends.notes)
 
 
+@app.command("prepare")
+def prepare_command(
+    artwork: Path = typer.Argument(..., exists=True, dir_okay=False, help="The file you are about to print."),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="Write the flattened file here. Omit to only report."),
+    ground: str = typer.Option("#ffffff", "--ground", help="What the gradient fades into — usually white, or the glass colour."),
+    edge: float = typer.Option(0.5, "--edge", help="Where the cut line falls, in alpha."),
+) -> None:
+    """Report what a printer will lose from a file, and optionally fix it.
+
+    A UV printer fires a drop or it does not, and under about half coverage it
+    fires none, so a soft airbrushed falloff prints as ink that stops dead.
+    With a white underbase the underbase ramps too — and the white and the
+    colour do not give up at quite the same place, which is the mottled band
+    you get instead of a fade.
+    """
+    from .prepare import flatten, preflight
+
+    raster = Raster.open(artwork)
+    report = preflight(raster)
+    typer.secho(f"{artwork.name}  {raster.width}x{raster.height}", fg=typer.colors.GREEN)
+    typer.echo(f"  artwork covers  : {report.covered:.0%} of the canvas")
+    typer.echo(f"  will not print  : {report.doomed:.0%} of it (under 50% alpha)")
+    typer.echo(f"  thin but prints : {report.marginal:.0%}")
+    typer.echo(f"  solid           : {report.solid:.0%}")
+    for note in report.notes:
+        typer.secho(f"  {note}", fg=None if report.clean else typer.colors.YELLOW)
+
+    if out is None:
+        if not report.clean:
+            typer.echo("\n  Re-run with --out to write a version that carries the fade in the colour.")
+        return
+
+    fixed = flatten(raster, ground, edge=edge)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fixed.save(out)
+    after = preflight(fixed)
+    typer.secho(f"\n  wrote {out}", fg=typer.colors.GREEN)
+    typer.echo(f"  will not print now: {after.doomed:.0%} (was {report.doomed:.0%})")
+
+
 @app.command("compose")
 def compose_command(
     base: Path = typer.Argument(..., exists=True, dir_okay=False, help="Procreate/Affinity export."),

@@ -531,3 +531,74 @@ def test_alignment_reads_the_subject_not_the_cut_out():
         assert abs(used - subject_axis[0]) < 1.0, (
             f"aligned from {used:.0f}° — the tracery, not the subject at {subject_axis[0]:.0f}°"
         )
+
+
+# --- getting a file past a printer that cannot fire half a drop -------------
+
+
+def _airbrushed(size: int = 300) -> Raster:
+    """A soft blob that fades to transparent — what an airbrush actually makes."""
+    ys, xs = np.mgrid[0:size, 0:size]
+    radius = np.sqrt(((xs - size / 2) / (size * 0.42)) ** 2 + ((ys - size / 2) / (size * 0.46)) ** 2)
+    alpha = np.clip(1.3 - radius * 1.3, 0, 1) ** 1.4
+    rgb = np.dstack([np.full((size, size), 124.0), np.full((size, size), 42.0),
+                     np.full((size, size), 170.0)])
+    return Raster(np.dstack([rgb, alpha * 255]).astype(np.uint8), dpi=(300.0, 300.0))
+
+
+def test_a_soft_airbrush_is_reported_as_mostly_unprintable():
+    """The measurement behind the advice, so the advice is not a hunch."""
+    from glassprint import prepare
+
+    report = prepare.preflight(_airbrushed())
+    assert report.doomed > 0.5, f"only {report.doomed:.0%} flagged"
+    assert not report.clean
+    assert any("stop dead" in note for note in report.notes), report.notes
+
+
+def test_flattening_moves_the_gradient_out_of_the_alpha():
+    """Same picture against the ground, but nothing left for the cliff to eat."""
+    from glassprint import prepare
+
+    art = _airbrushed()
+    fixed = prepare.flatten(art, "#ffffff")
+
+    assert prepare.preflight(fixed).doomed < 0.15
+    assert prepare.preflight(art).doomed > 0.5
+
+    # Composited over the ground the two are the same picture — the fade was
+    # moved, not removed. Measured well inside the cut line: the anti-aliased
+    # rim is a pixel or two of deliberate softness and is not the claim.
+    from scipy import ndimage
+
+    inside = ndimage.binary_erosion(fixed.alpha_f > 0.98, iterations=3)
+    def over_white(raster):
+        a = raster.alpha_f[:, :, None]
+        return raster.rgb_f * a + 1.0 * (1.0 - a)
+    assert np.abs(over_white(art)[inside] - over_white(fixed)[inside]).max() < 0.02
+
+
+def test_flattening_leaves_a_clean_cut_line_not_a_ramp():
+    """The only transparency left should be the outline, a pixel or two wide."""
+    from glassprint import prepare
+
+    fixed = prepare.flatten(_airbrushed(), "#ffffff")
+    alpha = fixed.alpha_f
+    partial = ((alpha > 0.02) & (alpha < 0.98)).sum()
+    solid = (alpha >= 0.98).sum()
+    assert partial < solid * 0.08, "the cut line is a ramp, not an edge"
+
+
+def test_an_antialiased_edge_is_not_mistaken_for_a_fade():
+    """Every drawn edge is soft. Flagging that would cry wolf on good files."""
+    from PIL import Image, ImageDraw
+
+    from glassprint import prepare
+
+    canvas = Image.new("RGBA", (300, 300), (0, 0, 0, 0))
+    ImageDraw.Draw(canvas).ellipse((40, 40, 260, 260), fill=(124, 42, 170, 255))
+    crisp = Raster(np.array(canvas, dtype=np.uint8), dpi=(300.0, 300.0))
+
+    report = prepare.preflight(crisp)
+    assert report.clean, report.notes
+    assert report.solid > 0.95
